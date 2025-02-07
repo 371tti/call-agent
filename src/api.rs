@@ -2,51 +2,51 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use super::{prompt::{Choice, Message}, function::FunctionDef};
 
-/// API headers構造体  
+/// API Response Headers struct
 #[derive(Debug)]
 pub struct APIResponseHeaders {
-    /// Retry-After  
+    /// Retry-After header value (in seconds)
     pub retry_after: Option<u64>,
-    /// X-RateLimit-Reset  
+    /// X-RateLimit-Reset header value (timestamp or seconds)
     pub reset: Option<u64>,
-    /// X-RateLimit-Remaining  
+    /// X-RateLimit-Remaining header value (number of remaining requests)
     pub rate_limit: Option<u64>,
-    /// X-RateLimit-Limit  
+    /// X-RateLimit-Limit header value (maximum allowed requests)
     pub limit: Option<u64>,
 
+    /// Additional custom headers as key-value pairs
     pub extra_other: Vec<(String, String)>,
 }
 
-/// APIリクエスト構造体  
+/// API Request structure for sending prompt and function information
 #[derive(Debug, Deserialize)]
 pub struct APIRequest {
-    /// モデル名の指定  
-    /// ex. "GPT-4o"  
+    /// The model name to be used (e.g., "GPT-4o")
     pub model: String,
-    /// プロンプトのメッセージ  
+    /// Array of prompt messages
     pub messages: Vec<Message>,
-    /// プロンプトで使用する関数の定義  
+    /// List of function definitions available for the prompt
     pub functions: Vec<FunctionDef>,
-    /// 関数の呼び出しの指定  
-    /// ex. OpenAI API  
-    /// - "auto"  
-    /// - "none"  
-    /// - { "name": "get_weather" }  
+    /// Function call instruction:
+    /// - "auto" to let the API decide the best function call
+    /// - "none" for no function call
+    /// - or an object like { "name": "get_weather" }
     pub function_call: serde_json::Value,
-    /// 温度
-    /// 0.0 ~ 1.0
+    /// Temperature value: a float from 0.0 and 1.0 controlling variability
     pub temperature: f64,
-    /// 最大トークン数
+    /// Maximum number of tokens to use in the response
     pub max_tokens: u64,
+    /// Top-p (nucleus sampling) parameter
     pub top_p: f64,
 }
 
-// カスタムSerialize実装
+// Custom Serialize implementation for APIRequest
 impl Serialize for APIRequest {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
+        // Serialize with capacity for potential optional fields
         let mut state = serializer.serialize_struct("APIRequest", 6)?;
 
         state.serialize_field("model", &self.model)?;
@@ -55,12 +55,12 @@ impl Serialize for APIRequest {
         state.serialize_field("max_tokens", &self.max_tokens)?;
         state.serialize_field("top_p", &self.top_p)?;
 
-        // functions が空でない場合のみシリアライズ
+        // Serialize "functions" only if not empty
         if !self.functions.is_empty() {
             state.serialize_field("functions", &self.functions)?;
         }
 
-        // function_call が "none" でない場合のみシリアライズ
+        // Serialize "function_call" only if it is not equal to the string "none"
         if self.function_call != serde_json::Value::String("none".to_string()) {
             state.serialize_field("function_call", &self.function_call)?;
         }
@@ -69,32 +69,40 @@ impl Serialize for APIRequest {
     }
 }
 
-
-/// レスポンス構造体
+/// API Response structure from the server
 #[derive(Debug, Deserialize)]
 pub struct APIResponse {
+    /// Array of choices (results) returned by the API
     pub choices: Option<Vec<Choice>>,
+    /// Model name used in the response
     pub model: Option<String>,
+    /// Type of the returned object (e.g., "chat.completion")
     pub object: Option<String>,
+    /// Error information if the request failed
     pub error: Option<APIError>,
+    /// Information regarding token usage
     pub usage: Option<APIUsage>,
 }
 
+/// API Error information structure
 #[derive(Debug, Deserialize)]
 pub struct APIError {
+    /// Error message text
     pub message: String,
+    /// Error type (renamed from "type" to avoid keyword conflict)
     #[serde(rename = "type")]
     pub err_type: String,
+    /// Error code number
     pub code: i32,
 }
 
+/// API Usage information detailing token counts
 #[derive(Debug, Deserialize)]
 pub struct APIUsage {
-    /// プロンプトで使用されたトークン数  
+    /// Number of tokens used in the prompt
     pub prompt_tokens: Option<u64>,
-    /// 応答で使用されたトークン数  
+    /// Number of tokens used in the response
     pub completion_tokens: Option<u64>,
-    /// 合計トークン数  
-    /// プロンプトと応答のトークン数の合計  
+    /// Total number of tokens used (prompt + response)
     pub total_tokens: Option<u64>,
 }

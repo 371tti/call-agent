@@ -10,7 +10,6 @@ pub enum ClientError {
     InvalidInput(String),
     /// I/O操作中のエラー
     IoError(std::io::Error),
-    // 他のエラー型も必要に応じて追加可能
     IndexOutOfBounds,
     ToolNotFound,
     InvalidEndpoint,
@@ -20,6 +19,27 @@ pub enum ClientError {
     UnknownError,
 }
 
+/// Implements the Display trait for ClientError, providing human-readable error messages
+/// for each variant.
+///
+/// This implementation ensures that all error messages are consistently formatted across
+/// the crate. Depending on the specific variant, a descriptive message or the underlying
+/// error details (e.g., for I/O errors) are displayed.
+///
+/// Error Variants:
+/// - NotFound: Indicates a missing resource or item. The message provides additional context.
+/// - InvalidInput: Denotes that the provided input is not valid. The message explains the issue.
+/// - IoError: Wraps a standard I/O error, relaying the system error message.
+/// - IndexOutOfBounds: Indicates that an index is outside the allowable bounds.
+/// - ToolNotFound: Signals that a required external tool was not found.
+/// - InvalidEndpoint: Denotes that a specified endpoint URL or address is invalid.
+/// - InvalidPrompt: Indicates that a provided prompt does not meet expected criteria.
+/// - NetworkError: Reflects issues with network connectivity or communication.
+/// - InvalidResponse: Indicates that the response received does not match the expected format.
+/// - UnknownError: A catch-all for errors that do not fit any of the other categories.
+///
+/// These messages are intended for crate users and are provided in English to support clarity
+/// and internationalization.
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
