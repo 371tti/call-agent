@@ -1,36 +1,36 @@
 # Call Agent
 
-Call Agentは、Rustで実装された通話関連の機能とAI連携を行うためのライブラリです。このライブラリは、ユーザープロンプトの処理、関数呼び出しの実行、ツールの定義と実行、及びAPI経由での対話をサポートします。
+Call Agent is a library implemented in Rust for call-related functions and AI integration. This library supports processing user prompts, executing function calls, defining and executing tools, and interacting via APIs.
 
-## 特徴
+## Features
 
-- 高性能なプロンプト管理とチャット応答生成機能
-- カスタムツール（関数）の定義と実行が可能
-- 柔軟なエラーハンドリングと詳細なレスポンス解析
-- 内部でのシリアライズ/デシリアライズ処理により、JSONとの連携が容易
+- High-performance prompt management and chat response generation
+- Ability to define and execute custom tools (functions)
+- Flexible error handling and detailed response analysis
+- Easy integration with JSON through internal serialization/deserialization
 
-## モジュール構成
+## Module Structure
 
-- **client**: OpenAI APIとの通信を担い、ツールの登録・呼び出しやレスポンス処理を行う。  
-- **prompt**: ユーザープロンプト、アシスタントメッセージ、関数呼び出しのメッセージを管理する。  
-- **function**: ツール（関数）定義、実行、および引数のパース処理を提供。  
-- **err**: エラー種類の定義とエラーメッセージ管理。  
-- **api**: APIリクエスト/レスポンスの構造体およびシリアライズ/デシリアライズの実装。
+- **client**: Handles communication with the OpenAI API, registers and calls tools, and processes responses.  
+- **prompt**: Manages user prompts, assistant messages, and function call messages.  
+- **function**: Provides tool (function) definition, execution, and argument parsing.  
+- **err**: Defines error types and manages error messages.  
+- **api**: Implements API request/response structures and serialization/deserialization.
 
-## インストール
+## Installation
 
-Cargo.tomlに以下を追加して依存関係として利用してください：
+Add the following to your Cargo.toml to use it as a dependency:
 
 ```toml
 [dependencies]
 call-agent = "0.1.0"
 ```
 
-## 使い方
+## Usage
 
-### クライアントの作成方法
+### Creating a Client
 
-以下はOpenAIClientの作成方法とカスタムツールの登録例です。
+Below is an example of creating an OpenAIClient and registering a custom tool.
 
 ```rust
 // create a new OpenAI client
@@ -51,50 +51,50 @@ let config = ModelConfig {
 };
 ```
 
-### client.rsにあるメソッドの説明
+### Methods in client.rs
 
 - new(end_point: &str, api_key: Option<&str>)  
-  → OpenAIClientの新規作成。エンドポイントの正規化とAPIキーの設定を行います。
+  → Creates a new OpenAIClient. Normalizes the endpoint and sets the API key.
 
 - def_tool<T: Tool + Send + Sync + 'static>(tool: Arc<T>)  
-  → ツールの登録。既存のツール名がある場合は上書きされます。
+  → Registers a tool. Overwrites if a tool with the same name exists.
 
 - list_tools()  
-  → 登録済みツールの一覧をタプル(ツール名, 説明, 有効状態)で返します。
+  → Returns a list of registered tools as tuples (tool name, description, enabled status).
 
 - switch_tool(tool_name: &str, t_enable: bool)  
-  → 指定したツールの有効/無効を切り替えます。
+  → Toggles the specified tool's enabled/disabled status.
 
 - export_tool_def()  
-  → 有効なツールの関数定義(FunctionDef)のリストを返します。
+  → Returns a list of function definitions (FunctionDef) for enabled tools.
 
 - send(model: &ModelConfig, prompt: &Vec<Message>)  
-  → 指定モデルでAPIリクエストを行い、応答を返します。
+  → Makes an API request with the specified model and returns the response.
 
 - send_use_tool(model: &ModelConfig, prompt: &Vec<Message>)  
-  → 自動ツール呼び出し指定("auto")を使ってAPIリクエストを行います。
+  → Makes an API request using the "auto" tool invocation.
 
 - send_with_tool(model: &ModelConfig, prompt: &Vec<Message>, tool_name: &str)  
-  → 特定のツールを強制して呼び出すAPIリクエストを行います。
+  → Makes an API request forcing the use of a specific tool.
 
 - call_api(...)  
-  → エンドポイントへリクエストを投げ、APIResultを返す内部メソッド。ヘッダー情報とレスポンス本体のシリアライズを行います。
+  → Internal method that sends a request to the endpoint and returns an APIResult. Serializes header information and response body.
 
 - create_prompt()  
-  → プロンプト管理用のOpenAIClientStateを生成します。
+  → Generates an OpenAIClientState for prompt management.
 
-### 基本的な利用方法
+### Basic Usage
 
-以下はmain.rsの使用例です。  
-ユーザーからの入力を受け、プロンプトに追加してAIの応答およびツールの動作をチェーンして実行します。
+Below is an example usage in main.rs.  
+It receives user input, adds it to the prompt, and executes AI responses and tool actions in a chain.
 
 ```rust
 // ...existing code in main.rs...
 
-// プロンプトにユーザー入力と画像メッセージを追加
+// Add user input and image message to the prompt
 let prompt = vec![Message::User {
     content: vec![
-        MessageContext::Text("こんにちは".to_string()),
+        MessageContext::Text("Hello".to_string()),
         MessageContext::Image(MessageImage {
             url: "https://example.com/image.jpg".to_string(),
             detail: None,
@@ -102,15 +102,15 @@ let prompt = vec![Message::User {
     ],
 }];
 
-// プロンプトストリームに追加し、応答生成（ツール利用あり）を実行
+// Add to the prompt stream and generate a response (with tool usage)
 prompt_stream.add(prompt).await;
 let result = prompt_stream.generate_use_tool(&config).await;
 ```
 
-### カスタムツールの定義
+### Defining Custom Tools
 
-モジュール`function`の`Tool`トレイトを実装することで、任意のツールを定義できます。  
-以下はテキストの長さを算出するサンプルツールの定義例です。
+You can define any tool by implementing the `Tool` trait in the `function` module.  
+Below is an example of defining a tool that calculates the length of a text.
 
 ```rust
 // ...existing code in main.rs...
@@ -143,33 +143,33 @@ impl Tool for TextLengthTool {
 }
 ```
 
-## API仕様
+## API Specification
 
-### リクエスト
+### Request
 
-- リクエストは`APIRequest`構造体で定義され、モデル名、メッセージ、関数定義、関数呼び出し情報、温度、最大トークン数、top_pが含まれます。
+- Requests are defined by the `APIRequest` structure, which includes model name, messages, function definitions, function call information, temperature, max token count, and top_p.
 
-### レスポンス
+### Response
 
-- レスポンスは`APIResponse`構造体で受け取り、choices、モデル情報、エラーメッセージ、使用されたトークン数などを確認できます。
-- ヘッダーからはレート制限情報なども取得可能です。
+- Responses are received by the `APIResponse` structure, which includes choices, model information, error messages, and the number of tokens used.
+- Rate limit information can also be obtained from the headers.
 
-## エラーハンドリング
+## Error Handling
 
-- `ClientError`は、ファイル未検出、入力エラー、ネットワークエラー、ツール未登録などの各種エラーを提供します。  
-- 各エラーは独自のDisplay実装により、デバッグやユーザー通知に利用できます。
+- `ClientError` provides various errors such as file not found, input error, network error, and tool not registered.  
+- Each error has a custom Display implementation for debugging and user notification.
 
-## ビルドと実行
+## Build and Run
 
-1. Cargoプロジェクトとしてクローンまたは配置してください。  
-2. `cargo build`でビルドし、`cargo run`で実行可能です。  
-3. main.rsに記述されたチャットループを利用して、対話型でAIの応答とツール実行を確認できます。
+1. Clone or place it as a Cargo project.  
+2. Build with `cargo build` and run with `cargo run`.  
+3. Use the chat loop described in main.rs to interactively check AI responses and tool execution.
 
-## 貢献
+## Contribution
 
-問題の報告や改善提案、プルリクエストを歓迎します。  
-詳細な仕様や変更点については、各モジュールのコメントをご参照ください。
+We welcome issue reports, improvement suggestions, and pull requests.  
+For detailed specifications and changes, please refer to the comments in each module.
 
-## ライセンス
+## License
 
-このプロジェクトはMITライセンスの下でライセンスされています。詳細はLICENSEファイルを参照してください。
+This project is licensed under the MIT License. See the LICENSE file for details.
