@@ -6,7 +6,7 @@ description = "A multimodal chat API library with tool support, OpenAI API compa
 license = "MIT"
 repository = "https://github.com/371tti/call-agent"
 keywords = ["ai", "chat", "openai", "multimodal"]
-categories = ["api-bindings", "asynchronous", "ai"]
+categories = ["api-bindings", "asynchronous"]
 
 
 [dependencies]
