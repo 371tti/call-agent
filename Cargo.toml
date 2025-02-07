@@ -2,6 +2,12 @@
 name = "call-agent"
 version = "0.1.0"
 edition = "2021"
+description = "A multimodal chat API library with tool support, OpenAI API compatible"
+license = "MIT"
+repository = "https://github.com/371tti/call-agent"
+keywords = ["ai", "chat", "openai", "multimodal"]
+categories = ["api-bindings", "asynchronous", "ai"]
+
 
 [dependencies]
 reqwest = { version = "0.12.12", features = ["json"] }
