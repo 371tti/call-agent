@@ -77,7 +77,7 @@ client.set_model_config(&config);
 - send(model: &ModelConfig, prompt: &Vec<Message>)  
   → 指定モデルでAPIリクエストを行い、応答を返します。
 
-- send_use_tool(model: &ModelConfig, prompt: &Vec<Message>)  
+- send_can_use_tool(model: &ModelConfig, prompt: &Vec<Message>)  
   → 自動ツール呼び出し指定("auto")を使ってAPIリクエストを行います。
 
 - send_with_tool(model: &ModelConfig, prompt: &Vec<Message>, tool_name: &str)  
