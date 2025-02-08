@@ -16,6 +16,7 @@ pub enum ClientError {
     InvalidPrompt,
     NetworkError,
     InvalidResponse,
+    ModelConfigNotSet,
     UnknownError,
 }
 
@@ -52,6 +53,7 @@ impl fmt::Display for ClientError {
             ClientError::InvalidPrompt => write!(f, "Invalid prompt"),
             ClientError::NetworkError => write!(f, "Network error"),
             ClientError::InvalidResponse => write!(f, "Invalid response"),
+            ClientError::ModelConfigNotSet => write!(f, "Model config not set"),
             ClientError::UnknownError => write!(f, "Unknown error"),
         }
     }

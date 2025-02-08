@@ -1,10 +1,9 @@
 use std::sync::Arc;
-use call_agent::{
-    client::{ModelConfig, OpenAIClient},
-    function::Tool,
-    prompt::{Message, MessageContext, MessageImage},
-};
+
+use call_agent::chat::{client::{ModelConfig, OpenAIClient}, function::Tool, prompt::{Message, MessageContext}};
 use serde_json::Value;
+
+
 
 // Define a custom tool
 pub struct TextLengthTool;
@@ -50,8 +49,8 @@ impl Tool for TextLengthTool {
 async fn main() {
     // create a new OpenAI client
     let mut client = OpenAIClient::new(
-        "https://example.com/v1",
-        Some("API_KEY"),
+        "https://api.openai.com/v1/",
+        Some("YOUR_API_KEY"),
     );
 
     // register the custom tool
@@ -60,10 +59,18 @@ async fn main() {
     // create a model configuration
     let config = ModelConfig {
         model: "gpt-4o-mini".to_string(),
-        temp: Some(0.5),
-        max_token: Some(100),
+        strict: None,
+        max_completion_tokens: Some(1000),
+        temperature: Some(0.8),
         top_p: Some(1.0),
+        parallel_tool_calls: None,
+        presence_penalty: Some(0.0),
+        model_name: None,
+        reasoning_effort: None,
     };
+
+    // set the model configuration
+    client.set_model_config(&config);
 
     // create a prompt stream
     let mut prompt_stream = client.create_prompt();
@@ -75,27 +82,25 @@ async fn main() {
         std::io::stdin().read_line(&mut input).expect("Failed to read line");
 
         // create a prompt
-        let prompt = vec![Message::User {
-            content: vec![
-                // create a text message
+        let prompt = vec![Message::User 
+        {
+            name:Some("user".to_string()),
+            content:vec!
+            [
                 MessageContext::Text(input.trim().to_string()),
-                // create an image message
-                MessageContext::Image(MessageImage {
-                    url: "https://pbs.twimg.com/media/GjHbHvXbIAEUrSs?format=jpg&name=900x900".to_string(),
-                    detail: None,
-                }),
-            ],
-        }];
+            ], 
+        }
+        ];
 
         // add the prompt to the stream
         prompt_stream.add(prompt).await;
 
         // generate a response
-        let result = prompt_stream.generate_use_tool(&config).await;
+        let result = prompt_stream.generate_can_use_tool(None).await;
         println!("{:?}", result);
 
         // get the response
-        let response = prompt_stream.last().await.unwrap();
+        let response = prompt_stream.prompt.clone();
         println!("{:?}", response);
     }
 }
