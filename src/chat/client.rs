@@ -520,7 +520,7 @@ impl<'a> OpenAIClientState<'a> {
             } else if let Some(tool_calls) = &choice.message.tool_calls {
                 self.add(vec![Message::Assistant {
                     name: model.model_name.clone(),
-                    content: vec![MessageContext::Text("call tools".to_string())],
+                    content: vec![MessageContext::Text("".to_string())],
                     tool_calls: choice.message.tool_calls.clone(),
                 }]).await;
                 for fnc in tool_calls {
