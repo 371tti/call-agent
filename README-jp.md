@@ -23,20 +23,18 @@ Cargo.tomlに以下を追加して依存関係として利用してください�
 
 ```toml
 [dependencies]
-call-agent = "0.1.0"
+call-agent = "1.0.0"
 ```
 
 ## 使い方
 
-### クライアントの作成方法
-
-以下はOpenAIClientの作成方法とカスタムツールの登録例です。
+### クライアントの作成とツール登録例
 
 ```rust
 // create a new OpenAI client
 let mut client = OpenAIClient::new(
-    "https://example.com/v1",
-    Some("API_KEY"),
+    "https://api.openai.com/v1/",
+    Some("YOUR_API_KEY"),
 );
 
 // register the custom tool
@@ -45,10 +43,18 @@ client.def_tool(Arc::new(TextLengthTool::new()));
 // create a model configuration
 let config = ModelConfig {
     model: "gpt-4o-mini".to_string(),
-    temp: Some(0.5),
-    max_token: Some(100),
+    strict: None,
+    max_completion_tokens: Some(1000),
+    temperature: Some(0.8),
     top_p: Some(1.0),
+    parallel_tool_calls: None,
+    presence_penalty: Some(0.0),
+    model_name: None,
+    reasoning_effort: None,
 };
+
+// set the model configuration
+client.set_model_config(&config);
 ```
 
 ### client.rsにあるメソッドの説明
@@ -105,6 +111,39 @@ let prompt = vec![Message::User {
 // プロンプトストリームに追加し、応答生成（ツール利用あり）を実行
 prompt_stream.add(prompt).await;
 let result = prompt_stream.generate_use_tool(&config).await;
+```
+
+### チャットループによる利用例
+
+```rust
+// create a prompt stream
+let mut prompt_stream = client.create_prompt();
+
+// chat loop: ユーザー入力の取得→プロンプトへの追加→ツール利用応答の生成
+loop {
+    // ユーザー入力の取得
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).expect("Failed to read line");
+
+    // プロンプトの作成
+    let prompt = vec![Message::User {
+        name: Some("user".to_string()),
+        content: vec![
+            MessageContext::Text(input.trim().to_string()),
+        ],
+    }];
+
+    // プロンプトの追加
+    prompt_stream.add(prompt).await;
+
+    // generate_can_use_toolを使った応答生成
+    let result = prompt_stream.generate_can_use_tool(None).await;
+    println!("{:?}", result);
+
+    // プロンプト内部の最新の状態を確認（オプション）
+    let response = prompt_stream.prompt.clone();
+    println!("{:?}", response);
+}
 ```
 
 ### カスタムツールの定義

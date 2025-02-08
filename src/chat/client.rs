@@ -331,7 +331,7 @@ impl OpenAIClient {
         };
         let text = res.text().await.map_err(|_| ClientError::InvalidResponse)?;
         let response_body: APIResponse =
-            serde_json::from_str(&text).map_err(|e| {
+            serde_json::from_str(&text).map_err(|_| {
             ClientError::InvalidResponse
             })?;
 
