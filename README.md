@@ -81,7 +81,7 @@ client.set_model_config(&config);
 - `send(model: &ModelConfig, prompt: &Vec<Message>)`
   → Makes an API request with the specified model and returns the response.
 
-- `send_use_tool(model: &ModelConfig, prompt: &Vec<Message>)`
+- `send_can_use_tool(model: &ModelConfig, prompt: &Vec<Message>)`
   → Makes an API request using the "auto" tool call specification.
 
 - `send_with_tool(model: &ModelConfig, prompt: &Vec<Message>, tool_name: &str)`
