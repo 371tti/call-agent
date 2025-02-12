@@ -380,6 +380,7 @@ impl OpenAIClient {
         OpenAIClientState {
             prompt: VecDeque::new(),
             client: self,
+            entry_limit: None,
         }
     }
 }
@@ -391,6 +392,7 @@ pub struct OpenAIClientState<'a> {
     pub prompt: VecDeque<Message>,
     /// Reference to the OpenAIClient.
     pub client: &'a OpenAIClient,
+    pub entry_limit: Option<u64>,
 }
 
 impl<'a> OpenAIClientState<'a> {
@@ -404,7 +406,29 @@ impl<'a> OpenAIClientState<'a> {
     ///
     /// A mutable reference to self.
     pub async fn add(&mut self, messages: Vec<Message>) -> &mut Self {
+        if let Some(limit) = self.entry_limit {
+            while self.prompt.len() as u64 + messages.len() as u64 > limit {
+                self.prompt.pop_front();
+            }
+        }
         self.prompt.extend(messages);
+        self
+    }
+
+    /// Set the maximum number of entries in the conversation prompt.
+    ///    
+    /// # Arguments
+    /// 
+    /// * `limit` - The maximum number of entries.
+    /// 
+    /// # Returns
+    /// 
+    /// A mutable reference to self.
+    pub async fn set_entry_limit(&mut self, limit: u64) -> &mut Self {
+        self.entry_limit = Some(limit);
+        while self.prompt.len() as u64 > limit {
+            self.prompt.pop_front();
+        }
         self
     }
 
@@ -424,7 +448,7 @@ impl<'a> OpenAIClientState<'a> {
     ///
     /// An Option containing a reference to the last Message.
     pub async fn last(&mut self) -> Option<&Message> {
-        self.prompt.front()
+        self.prompt.back()
     }
 
     /// Generate an AI response.
