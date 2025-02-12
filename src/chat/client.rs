@@ -193,7 +193,7 @@ impl OpenAIClient {
     /// The API result or a ClientError.
     pub async fn send_can_use_tool(
         &self,
-        prompt: &Vec<Message>,
+        prompt: &VecDeque<Message>,
         model: Option<&ModelConfig>,
     ) -> Result<APIResult, ClientError> {
         match self
@@ -221,7 +221,7 @@ impl OpenAIClient {
     /// The API result or a ClientError.
     pub async fn send_use_tool(
         &self,
-        prompt: &Vec<Message>,
+        prompt: &VecDeque<Message>,
         model: Option<&ModelConfig>,
     ) -> Result<APIResult, ClientError> {
         match self
@@ -250,7 +250,7 @@ impl OpenAIClient {
     /// The API result or a ClientError.
     pub async fn send_with_tool(
         &self,
-        prompt: &Vec<Message>,
+        prompt: &VecDeque<Message>,
         tool_name: &str,
         model: Option<&ModelConfig>,
     ) -> Result<APIResult, ClientError> {
