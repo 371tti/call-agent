@@ -385,6 +385,7 @@ impl OpenAIClient {
 }
 
 /// Represents a client state with a prompt history.
+#[derive(Clone)]
 pub struct OpenAIClientState<'a> {
     /// Conversation history messages.
     pub prompt: VecDeque<Message>,
