@@ -1,6 +1,6 @@
 [package]
 name = "call-agent"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "A multimodal chat API library with tool support, OpenAI API compatible"
 license = "MIT"
@@ -14,5 +14,3 @@ reqwest = { version = "0.12.12", features = ["json"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokenizers = "0.21.0"
-
