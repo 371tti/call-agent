@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
 use reqwest::{Client, Response};
 
@@ -165,7 +165,7 @@ impl OpenAIClient {
     /// The API result or a ClientError.
     pub async fn send(
         &self,
-        prompt: &Vec<Message>,
+        prompt: &VecDeque<Message>,
         model: Option<&ModelConfig>,
     ) -> Result<APIResult, ClientError> {
         match self
@@ -288,7 +288,7 @@ impl OpenAIClient {
     /// An APIResult on success or a ClientError on failure.
     pub async fn call_api(
         &self,
-        prompt: &Vec<Message>,
+        prompt: &VecDeque<Message>,
         tool_choice: Option<&serde_json::Value>,
         model_config: Option<&ModelConfig>,
     ) -> Result<APIResult, ClientError> {
@@ -341,7 +341,7 @@ impl OpenAIClient {
         })
     }
 
-    pub async fn request_api(&self ,end_point: &str, api_key: Option<&str>, model_config: &ModelConfig ,message: &Vec<Message>, tools: &Vec<ToolDef>, tool_choice: &serde_json::Value) -> Result<Response, ClientError> {
+    pub async fn request_api(&self ,end_point: &str, api_key: Option<&str>, model_config: &ModelConfig ,message: &VecDeque<Message>, tools: &Vec<ToolDef>, tool_choice: &serde_json::Value) -> Result<Response, ClientError> {
         let request = APIRequest {
             model:                  model_config.model.clone(),
             messages:               message.clone(),
@@ -378,7 +378,7 @@ impl OpenAIClient {
     /// A new OpenAIClientState with an empty message history.
     pub fn create_prompt(&self) -> OpenAIClientState {
         OpenAIClientState {
-            prompt: Vec::new(),
+            prompt: VecDeque::new(),
             client: self,
         }
     }
@@ -387,7 +387,7 @@ impl OpenAIClient {
 /// Represents a client state with a prompt history.
 pub struct OpenAIClientState<'a> {
     /// Conversation history messages.
-    pub prompt: Vec<Message>,
+    pub prompt: VecDeque<Message>,
     /// Reference to the OpenAIClient.
     pub client: &'a OpenAIClient,
 }
@@ -423,7 +423,7 @@ impl<'a> OpenAIClientState<'a> {
     ///
     /// An Option containing a reference to the last Message.
     pub async fn last(&mut self) -> Option<&Message> {
-        self.prompt.last()
+        self.prompt.front()
     }
 
     /// Generate an AI response.

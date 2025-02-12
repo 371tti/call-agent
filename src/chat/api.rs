@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use super::function::ToolDef;
@@ -27,7 +29,7 @@ pub struct APIRequest {
     pub model: String,
 
     /// Array of prompt messages
-    pub messages: Vec<Message>,
+    pub messages: VecDeque<Message>,
 
     /// Defines the tools available to the model
     #[serde(skip_serializing_if = "Vec::is_empty")]
