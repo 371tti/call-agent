@@ -3,3 +3,4 @@ pub mod client;
 pub mod function;
 pub mod prompt;
 pub mod err;
+pub mod tokenizer;
