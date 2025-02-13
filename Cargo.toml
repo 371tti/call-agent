@@ -1,6 +1,6 @@
 [package]
 name = "call-agent"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 description = "A multimodal chat API library with tool support, OpenAI API compatible"
 license = "MIT"
