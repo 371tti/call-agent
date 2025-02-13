@@ -245,7 +245,7 @@ pub struct MessageImage {
 /// Represents a choice from the API response.
 ///
 /// A choice contains a response message and a finish reason.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Choice {
     /// The index of the choice in the response.
     pub index: usize,
@@ -260,7 +260,7 @@ pub struct Choice {
 /// Represents a response message from the API.
 ///
 /// Contains the role of the responder, optional text content, and an optional function call.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ResponseMessage {
     /// The role of the message sender.
     pub role: String,

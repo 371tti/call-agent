@@ -7,7 +7,7 @@ use super::function::ToolDef;
 use super::prompt::{Choice, Message};
 
 /// API Response Headers struct
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct APIResponseHeaders {
     /// Retry-After header value (in seconds)
     pub retry_after: Option<u64>,
@@ -124,7 +124,7 @@ impl Serialize for APIRequest {
 }
 
 /// API Response structure from the server
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct APIResponse {
     /// Unique identifier for the API response
     pub id: String,
@@ -143,7 +143,7 @@ pub struct APIResponse {
 }
 
 /// API Error information structure
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct APIError {
     /// Error message text
     pub message: String,
@@ -155,7 +155,7 @@ pub struct APIError {
 }
 
 /// API Usage information detailing token counts
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct APIUsage {
     /// Number of tokens used in the prompt
     pub prompt_tokens: Option<u64>,

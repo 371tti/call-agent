@@ -5,11 +5,12 @@ use reqwest::{Client, Response};
 use super::{
     api::{APIRequest, APIResponse, APIResponseHeaders},
     err::ClientError,
-    function::{FunctionDef, Tool, ToolDef},
+    function::{FunctionCall, FunctionDef, Tool, ToolDef},
     prompt::{Message, MessageContext},
 };
 
 /// Main client structure for interacting with the OpenAI API.
+#[derive(Clone)]
 pub struct OpenAIClient {
     /// HTTP client
     pub client: Client,
@@ -55,7 +56,7 @@ pub struct ModelConfig {
 }
 
 /// Contains the API response and its headers.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct APIResult {
     /// The parsed API response.
     pub response: APIResponse,
@@ -379,7 +380,7 @@ impl OpenAIClient {
     pub fn create_prompt(&self) -> OpenAIClientState {
         OpenAIClientState {
             prompt: VecDeque::new(),
-            client: self,
+            client: self.clone(),
             entry_limit: None,
         }
     }
@@ -387,15 +388,24 @@ impl OpenAIClient {
 
 /// Represents a client state with a prompt history.
 #[derive(Clone)]
-pub struct OpenAIClientState<'a> {
+pub struct OpenAIClientState {
     /// Conversation history messages.
     pub prompt: VecDeque<Message>,
     /// Reference to the OpenAIClient.
-    pub client: &'a OpenAIClient,
+    pub client: OpenAIClient,
     pub entry_limit: Option<u64>,
 }
 
-impl<'a> OpenAIClientState<'a> {
+#[derive(Debug, Clone)]
+pub struct GenerateResponse {
+    pub has_content: bool,
+    pub has_tool_calls: bool,
+    pub content: Option<String>,
+    pub tool_calls: Option<Vec<FunctionCall>>,
+    pub api_result: APIResult,
+}
+
+impl<'a> OpenAIClientState {
     /// Add messages to the conversation prompt.
     ///
     /// # Arguments
@@ -463,26 +473,48 @@ impl<'a> OpenAIClientState<'a> {
     /// # Returns
     ///
     /// An APIResult with the API response or a ClientError.
-    pub async fn generate(&mut self, model: Option<&ModelConfig>) -> Result<APIResult, ClientError> {
-        let model = model.unwrap_or(self.client.model_config.as_ref().ok_or(ClientError::ModelConfigNotSet)?);
-        let result = self.client.send(&self.prompt, Some(model)).await?;
-        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
-        if let Some(choice) = choices.first() {
-            if let Some(content) = &choice.message.content {
-            self.add(vec![Message::Assistant {
-                name: model.model_name.clone(),
-                content: vec![MessageContext::Text(content.clone())],
-                tool_calls: None,
-            }])
-            .await;
-            } else {
-            return Err(ClientError::UnknownError);
-            }
-        } else {
-            return Err(ClientError::InvalidResponse);
-        }
+    pub async fn generate(&mut self, model: Option<&ModelConfig>) -> Result<GenerateResponse, ClientError> {
+        // Retrieve model configuration: use provided model or fallback to the client's config.
+        let model = model.unwrap_or(
+            self.client
+                .model_config
+                .as_ref()
+                .ok_or(ClientError::ModelConfigNotSet)?
+        );
 
-        Ok(result)
+        // Send the request and extract the first choice.
+        let result = self.client.send(&self.prompt, Some(model)).await?;
+        let choice = result
+            .response
+            .choices
+            .as_ref()
+            .and_then(|choices| choices.first())
+            .ok_or(ClientError::InvalidResponse)?;
+
+        // Ensure there is content in the assistant's reply.
+        let content = choice
+            .message
+            .content
+            .as_ref()
+            .ok_or(ClientError::UnknownError)?;
+
+        // Add the assistant's message to the conversation.
+        self.add(vec![Message::Assistant {
+            name: model.model_name.clone(),
+            content: vec![MessageContext::Text(content.clone())],
+            tool_calls: None,
+        }])
+        .await;
+
+        Ok(
+            GenerateResponse {
+                has_content: true,
+                has_tool_calls: false,
+                content: Some(content.clone()),
+                tool_calls: None,
+                api_result: result,
+            }
+        )
     }
 
     /// Generate an AI response, possibly calling a tool.
@@ -496,90 +528,62 @@ impl<'a> OpenAIClientState<'a> {
     /// # Returns
     ///
     /// An APIResult with the API response or a ClientError.
-    pub async fn generate_can_use_tool(&mut self, model: Option<&ModelConfig>) -> Result<APIResult, ClientError> {
-        let model = model.unwrap_or(self.client.model_config.as_ref().ok_or(ClientError::ModelConfigNotSet)?);
+    pub async fn generate_can_use_tool(&mut self, model: Option<&ModelConfig>) -> Result<GenerateResponse, ClientError> {
+        // Use the provided model configuration or fallback to the client's configuration.
+        let model = model.or(self.client.model_config.as_ref()).ok_or(ClientError::ModelConfigNotSet)?;
+
+        // Send the request with "can use tool" mode.
         let result = self.client.send_can_use_tool(&self.prompt, Some(model)).await?;
-        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
-        if let Some(choice) = choices.first() {
-            if let Some(content) = &choice.message.content {
-                if let Some(tool_calls) = &choice.message.tool_calls {
-                    self.add(vec![Message::Assistant {
-                        name: model.model_name.clone(),
-                        content: vec![MessageContext::Text(content.clone())],
-                        tool_calls: choice.message.tool_calls.clone(),
-                    }]).await;
-                    for fnc in tool_calls {
-                        let (tool, enabled) = self
-                            .client
-                            .tools
-                            .get(&fnc.function.name)
-                            .ok_or(ClientError::ToolNotFound)?;
-                        if !*enabled {
-                            return Err(ClientError::ToolNotFound);
-                        }
-                        match tool.run(fnc.function.arguments.clone()) {
-                            Ok(res) => {
-                                self.add(vec![Message::Tool {
-                                    tool_call_id: fnc.id.clone(),
-                                    content: vec![MessageContext::Text(res)],
-                                }])
-                                .await;
-                            }
-                            Err(e) => {
-                                self.add(vec![Message::Tool {
-                                    tool_call_id: fnc.id.clone(),
-                                    content: vec![MessageContext::Text(format!("Error: {}", e))],
-                                }])
-                                .await;
-                            }
-                        }
-                    }
-                } else {
-                    self.add(vec![Message::Assistant {
-                        name: model.model_name.clone(),
-                        content: vec![MessageContext::Text(content.clone())],
-                        tool_calls: None,
-                    }])
-                    .await;
+        let choices = result
+            .response
+            .choices
+            .as_ref()
+            .ok_or(ClientError::InvalidResponse)?;
+        
+        let choice = choices.first().ok_or(ClientError::InvalidResponse)?;
+        let has_content = choice.message.content.is_some();
+        let has_tool_calls = choice.message.tool_calls.is_some();
+
+        // Ensure that there is either content or a tool call.
+        if !has_content && !has_tool_calls {
+            return Err(ClientError::UnknownError);
+        }
+
+        // If content is returned, add the assistant message.
+        if let Some(content) = &choice.message.content {
+            self.add(vec![Message::Assistant {
+                name: model.model_name.clone(),
+                content: vec![MessageContext::Text(content.clone())],
+                tool_calls: choice.message.tool_calls.clone(),
+            }]).await;
+        }
+
+        // Process any tool calls.
+        if let Some(tool_calls) = &choice.message.tool_calls {
+            for call in tool_calls {
+                let (tool, enabled) = self.client.tools
+                    .get(&call.function.name)
+                    .ok_or(ClientError::ToolNotFound)?;
+                if !*enabled {
+                    return Err(ClientError::ToolNotFound);
                 }
-            } else if let Some(tool_calls) = &choice.message.tool_calls {
-                self.add(vec![Message::Assistant {
-                    name: model.model_name.clone(),
-                    content: vec![MessageContext::Text("".to_string())],
-                    tool_calls: choice.message.tool_calls.clone(),
+                let result_text = tool
+                    .run(call.function.arguments.clone())
+                    .unwrap_or_else(|e| format!("Error: {}", e));
+                self.add(vec![Message::Tool {
+                    tool_call_id: call.id.clone(),
+                    content: vec![MessageContext::Text(result_text)],
                 }]).await;
-                for fnc in tool_calls {
-                    let (tool, enabled) = self
-                        .client
-                        .tools
-                        .get(&fnc.function.name)
-                        .ok_or(ClientError::ToolNotFound)?;
-                    if !*enabled {
-                        return Err(ClientError::ToolNotFound);
-                    }
-                    match tool.run(fnc.function.arguments.clone()) {
-                        Ok(res) => {
-                            self.add(vec![Message::Tool {
-                                tool_call_id: fnc.id.clone(),
-                                content: vec![MessageContext::Text(res)],
-                            }])
-                            .await;
-                        }
-                        Err(e) => {
-                            self.add(vec![Message::Tool {
-                                tool_call_id: fnc.id.clone(),
-                                content: vec![MessageContext::Text(format!("Error: {}", e))],
-                            }])
-                            .await;
-                        }
-                    }
-                }
-            } else {
-                return Err(ClientError::UnknownError);
             }
         }
 
-        Ok(result)
+        Ok(GenerateResponse {
+            has_content,
+            has_tool_calls,
+            content: choice.message.content.clone(),
+            tool_calls: choice.message.tool_calls.clone(),
+            api_result: result,
+        })
     }
 
     /// Generate an AI response while forcing the use of a specific tool.
@@ -594,99 +598,68 @@ impl<'a> OpenAIClientState<'a> {
     /// # Returns
     /// 
     /// An APIResult with the API response or a ClientError.
-    pub async fn generate_use_tool(&mut self, model: Option<&ModelConfig>) -> Result<APIResult, ClientError> {
+    pub async fn generate_use_tool(&mut self, model: Option<&ModelConfig>) -> Result<GenerateResponse, ClientError> {
         let model = model.unwrap_or(
             self.client
                 .model_config
                 .as_ref()
                 .ok_or(ClientError::ModelConfigNotSet)?
         );
+
         let result = self.client.send_use_tool(&self.prompt, Some(model)).await?;
-        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
-        
-        if let Some(choice) = choices.first() {
-            if let Some(content) = &choice.message.content {
-                if let Some(tool_calls) = &choice.message.tool_calls {
-                    self.add(vec![Message::Assistant {
-                        name: model.model_name.clone(),
-                        content: vec![MessageContext::Text(content.clone())],
-                        tool_calls: choice.message.tool_calls.clone(),
-                    }])
-                    .await;
-                    for fnc in tool_calls {
-                        let (tool, enabled) = self
-                            .client
-                            .tools
-                            .get(&fnc.function.name)
-                            .ok_or(ClientError::ToolNotFound)?;
-                        if !*enabled {
-                            return Err(ClientError::ToolNotFound);
-                        }
-                        match tool.run(fnc.function.arguments.clone()) {
-                            Ok(res) => {
-                                self.add(vec![Message::Tool {
-                                    tool_call_id: fnc.id.clone(),
-                                    content: vec![MessageContext::Text(res)],
-                                }])
-                                .await;
-                            }
-                            Err(e) => {
-                                self.add(vec![Message::Tool {
-                                    tool_call_id: fnc.id.clone(),
-                                    content: vec![MessageContext::Text(format!("Error: {}", e))],
-                                }])
-                                .await;
-                            }
-                        }
-                    }
-                } else {
-                    self.add(vec![Message::Assistant {
-                        name: model.model_name.clone(),
-                        content: vec![MessageContext::Text(content.clone())],
-                        tool_calls: None,
-                    }])
-                    .await;
-                }
-            } else if let Some(tool_calls) = &choice.message.tool_calls {
-                self.add(vec![Message::Assistant {
-                    name: model.model_name.clone(),
-                    content: vec![MessageContext::Text("call tools".to_string())],
-                    tool_calls: choice.message.tool_calls.clone(),
-                }])
-                .await;
-                for fnc in tool_calls {
-                    let (tool, enabled) = self
-                        .client
-                        .tools
-                        .get(&fnc.function.name)
-                        .ok_or(ClientError::ToolNotFound)?;
-                    if !*enabled {
-                        return Err(ClientError::ToolNotFound);
-                    }
-                    match tool.run(fnc.function.arguments.clone()) {
-                        Ok(res) => {
-                            self.add(vec![Message::Tool {
-                                tool_call_id: fnc.id.clone(),
-                                content: vec![MessageContext::Text(res)],
-                            }])
-                            .await;
-                        }
-                        Err(e) => {
-                            self.add(vec![Message::Tool {
-                                tool_call_id: fnc.id.clone(),
-                                content: vec![MessageContext::Text(format!("Error: {}", e))],
-                            }])
-                            .await;
-                        }
-                    }
-                }
-            } else {
-                return Err(ClientError::UnknownError);
-            }
-        } else {
-            return Err(ClientError::UnknownError);
+        let choices = result
+            .response
+            .choices
+            .as_ref()
+            .ok_or(ClientError::InvalidResponse)?;
+
+        let choice = choices.first().ok_or(ClientError::InvalidResponse)?;
+        let content = choice.message.content.clone();
+        let tool_calls = choice.message.tool_calls.clone();
+
+        // If there is no tool call, return an error.
+        if tool_calls.is_none() {
+            return Err(ClientError::ToolNotFound);
         }
-        Ok(result)
+
+        let has_content = content.is_some();
+
+        // Add the assistant's reply to the conversation.
+        self.add(vec![Message::Assistant {
+            name: model.model_name.clone(),
+            content: vec![MessageContext::Text(content.clone().unwrap_or_default())],
+            tool_calls: tool_calls.clone(),
+        }]).await;
+
+        // Process any tool calls.
+        if let Some(calls) = tool_calls.clone() {
+            for call in calls {
+                let (tool, enabled) = self
+                    .client
+                    .tools
+                    .get(&call.function.name)
+                    .ok_or(ClientError::ToolNotFound)?;
+                if !*enabled {
+                    return Err(ClientError::ToolNotFound);
+                }
+                let result_text = match tool.run(call.function.arguments.clone()) {
+                    Ok(res) => res,
+                    Err(e) => format!("Error: {}", e),
+                };
+                self.add(vec![Message::Tool {
+                    tool_call_id: call.id.clone(),
+                    content: vec![MessageContext::Text(result_text)],
+                }]).await;
+            }
+        }
+
+        Ok(GenerateResponse {
+            has_content,
+            has_tool_calls: true,
+            content,
+            tool_calls,
+            api_result: result,
+        })
     }
 
     /// Generate an AI response while forcing the use of a specific tool.
@@ -705,92 +678,53 @@ impl<'a> OpenAIClientState<'a> {
         let model = model.unwrap_or(
             self.client.model_config.as_ref().ok_or(ClientError::ModelConfigNotSet)?
         );
+
         let result = self.client.send_with_tool(&self.prompt, tool_name, Some(model)).await?;
-        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
-        
-        if let Some(choice) = choices.first() {
-            if let Some(content) = &choice.message.content {
-                if let Some(tool_calls) = &choice.message.tool_calls {
-                    self.add(vec![Message::Assistant {
-                        name: model.model_name.clone(),
-                        content: vec![MessageContext::Text(content.clone())],
-                        tool_calls: choice.message.tool_calls.clone(),
-                    }])
-                    .await;
-                    for fnc in tool_calls {
-                        let (tool, enabled) = self
-                            .client
-                            .tools
-                            .get(&fnc.function.name)
-                            .ok_or(ClientError::ToolNotFound)?;
-                        if !*enabled {
-                            return Err(ClientError::ToolNotFound);
-                        }
-                        match tool.run(fnc.function.arguments.clone()) {
-                            Ok(res) => {
-                                self.add(vec![Message::Tool {
-                                    tool_call_id: fnc.id.clone(),
-                                    content: vec![MessageContext::Text(res)],
-                                }])
-                                .await;
-                            }
-                            Err(e) => {
-                                self.add(vec![Message::Tool {
-                                    tool_call_id: fnc.id.clone(),
-                                    content: vec![MessageContext::Text(format!("Error: {}", e))],
-                                }])
-                                .await;
-                            }
-                        }
-                    }
-                } else {
-                    self.add(vec![Message::Assistant {
-                        name: model.model_name.clone(),
-                        content: vec![MessageContext::Text(content.clone())],
-                        tool_calls: None,
-                    }])
-                    .await;
-                }
-            } else if let Some(tool_calls) = &choice.message.tool_calls {
-                self.add(vec![Message::Assistant {
-                    name: model.model_name.clone(),
-                    content: vec![MessageContext::Text("call tools".to_string())],
-                    tool_calls: choice.message.tool_calls.clone(),
-                }])
-                .await;
-                for fnc in tool_calls {
-                    let (tool, enabled) = self
-                        .client
-                        .tools
-                        .get(&fnc.function.name)
-                        .ok_or(ClientError::ToolNotFound)?;
-                    if !*enabled {
-                        return Err(ClientError::ToolNotFound);
-                    }
-                    match tool.run(fnc.function.arguments.clone()) {
-                        Ok(res) => {
-                            self.add(vec![Message::Tool {
-                                tool_call_id: fnc.id.clone(),
-                                content: vec![MessageContext::Text(res)],
-                            }])
-                            .await;
-                        }
-                        Err(e) => {
-                            self.add(vec![Message::Tool {
-                                tool_call_id: fnc.id.clone(),
-                                content: vec![MessageContext::Text(format!("Error: {}", e))],
-                            }])
-                            .await;
-                        }
-                    }
-                }
-            } else {
-                return Err(ClientError::UnknownError);
+        let choices = result
+            .response
+            .choices
+            .as_ref()
+            .ok_or(ClientError::InvalidResponse)?;
+            
+        let choice = choices.first().ok_or(ClientError::InvalidResponse)?;
+
+        // Ensure that the forced tool call exists.
+        let tool_calls = choice.message.tool_calls.as_ref().ok_or(ClientError::ToolNotFound)?;
+        if !tool_calls.iter().any(|call| call.function.name == tool_name) {
+            return Err(ClientError::ToolNotFound);
+        }
+
+        // Add the assistant's reply to the conversation.
+        self.add(vec![Message::Assistant {
+            name: model.model_name.clone(),
+            content: vec![MessageContext::Text(choice.message.content.clone().unwrap_or_default())],
+            tool_calls: Some(tool_calls.clone()),
+        }])
+        .await;
+
+        // Process the forced tool calls.
+        for fnc in tool_calls {
+            if fnc.function.name != tool_name {
+                continue;
             }
-        } else {
-            return Err(ClientError::UnknownError);
+            let (tool, enabled) = self
+                .client
+                .tools
+                .get(&fnc.function.name)
+                .ok_or(ClientError::ToolNotFound)?;
+            if !*enabled {
+                return Err(ClientError::ToolNotFound);
+            }
+            let tool_result = match tool.run(fnc.function.arguments.clone()) {
+                Ok(res) => res,
+                Err(e) => format!("Error: {}", e),
+            };
+            self.add(vec![Message::Tool {
+                tool_call_id: fnc.id.clone(),
+                content: vec![MessageContext::Text(tool_result)],
+            }])
+            .await;
         }
         Ok(result)
     }
-    
 }
