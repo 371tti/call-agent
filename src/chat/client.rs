@@ -331,7 +331,6 @@ impl OpenAIClient {
                 .collect(),
         };
         let text = res.text().await.map_err(|_| ClientError::InvalidResponse)?;
-        println!("{}", text);
         let response_body: APIResponse =
             serde_json::from_str(&text).map_err(|_| {
             ClientError::InvalidResponse
@@ -724,7 +723,7 @@ impl<'a> OpenAIClientState {
                 }]).await;
             }
         }
-        
+
         Ok(
             GenerateResponse {
                 has_content,
