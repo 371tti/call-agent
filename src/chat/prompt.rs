@@ -11,6 +11,7 @@ use super::function::FunctionCall;
 #[derive(Debug, Clone)]
 pub enum Message {
     /// A message sent by a user.
+    /// should the name matches the pattern '^[a-zA-Z0-9_-]+$'."
     User { 
         name: Option<String>,
         content: Vec<MessageContext> 
@@ -21,18 +22,21 @@ pub enum Message {
         content: Vec<MessageContext> 
     },
     /// A message from the assistant.
+    /// should the name matches the pattern '^[a-zA-Z0-9_-]+$'."
     Assistant { 
         name: Option<String>,
         content: Vec<MessageContext>, 
         tool_calls: Option<Vec<FunctionCall>>,
     },
     /// A system prompt.
+    /// should the name matches the pattern '^[a-zA-Z0-9_-]+$'."
     System { 
         name: Option<String>,
         content: String
     },
     /// A message from the developer.
     /// Treated as a system message in unsupported models.
+    /// should the name matches the pattern '^[a-zA-Z0-9_-]+$'."
     Developer { 
         name: Option<String>,
         content: String
