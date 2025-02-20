@@ -677,7 +677,7 @@ impl<'a> OpenAIClientState {
             self.client.model_config.as_ref().ok_or(ClientError::ModelConfigNotSet)?
         );
 
-        let result = self.client.send_use_tool(&self.prompt, Some(model)).await?;
+        let result = self.client.send_with_tool(&self.prompt, tool_name, Some(model)).await?;
         let choices = result
             .response
             .choices
