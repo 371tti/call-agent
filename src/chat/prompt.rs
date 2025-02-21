@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
@@ -8,7 +10,7 @@ use super::function::FunctionCall;
 /// This enum describes various types of messages used in prompts.
 /// It supports user messages, function messages, and assistant messages.
 /// Each variant holds the content of the message.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Message {
     /// A message sent by a user.
     /// should the name matches the pattern '^[a-zA-Z0-9_-]+$'."
@@ -41,6 +43,56 @@ pub enum Message {
         name: Option<String>,
         content: String
     },
+}
+
+impl fmt::Debug for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Message::User { name, content } => {
+                writeln!(f, "User: {}", name.as_deref().unwrap_or("Anonymous"))?;
+                for ctx in content {
+                    match ctx {
+                        MessageContext::Text(text) => writeln!(f, "    {}", text)?,
+                        MessageContext::Image(image) => writeln!(f, "    [Image URL: {}]", image.url)?,
+                    }
+                }
+                Ok(())
+            }
+            Message::Tool { tool_call_id, content } => {
+                writeln!(f, "Tool: {} - Tool Call", tool_call_id)?;
+                for ctx in content {
+                    match ctx {
+                        MessageContext::Text(text) => writeln!(f, "    {}", text)?,
+                        MessageContext::Image(image) => writeln!(f, "    [Image URL: {}]", image.url)?,
+                    }
+                }
+                Ok(())
+            }
+            Message::Assistant { name, content, tool_calls } => {
+                writeln!(f, "Assistant: {}", name.as_deref().unwrap_or("Assistant"))?;
+                for ctx in content {
+                    match ctx {
+                        MessageContext::Text(text) => writeln!(f, "    {}", text)?,
+                        MessageContext::Image(image) => writeln!(f, "    [Image URL: {}]", image.url)?,
+                    }
+                }
+                if let Some(calls) = tool_calls {
+                    for call in calls {
+                        writeln!(f, "    Tool Call: {:?}", call)?;
+                    }
+                }
+                Ok(())
+            }
+            Message::System { name, content } => {
+                writeln!(f, "System: {}", name.as_deref().unwrap_or("System"))?;
+                writeln!(f, "    {}", content)
+            }
+            Message::Developer { name, content } => {
+                writeln!(f, "Developer: {}", name.as_deref().unwrap_or("Developer"))?;
+                writeln!(f, "    {}", content)
+            }
+        }
+    }
 }
 
 // Custom serialization implementation for Message.
