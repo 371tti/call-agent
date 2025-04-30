@@ -331,6 +331,7 @@ impl OpenAIClient {
                 .collect(),
         };
         let text = res.text().await.map_err(|_| ClientError::InvalidResponse)?;
+        println!("{}", text);
         let response_body: APIResponse =
             serde_json::from_str(&text).map_err(|_| {
             ClientError::InvalidResponse
@@ -524,11 +525,13 @@ impl<'a> OpenAIClientState {
     /// # Arguments
     ///
     /// * `model` - The model configuration.
+    /// * `show_call` - Optional callback function to show the tool call.
     ///
     /// # Returns
     ///
     /// An APIResult with the API response or a ClientError.
-    pub async fn generate_can_use_tool(&mut self, model: Option<&ModelConfig>) -> Result<GenerateResponse, ClientError> {
+    pub async fn generate_can_use_tool<F>(&mut self, model: Option<&ModelConfig>, show_call: Option<F>) -> Result<GenerateResponse, ClientError>
+    where F: Fn(&str, &str) {
         // Use the provided model configuration or fallback to the client's configuration.
         let model = model.or(self.client.model_config.as_ref()).ok_or(ClientError::ModelConfigNotSet)?;
 
@@ -565,6 +568,9 @@ impl<'a> OpenAIClientState {
                 if !*enabled {
                     return Err(ClientError::ToolNotFound);
                 }
+                if let Some(show_call) = &show_call {
+                    show_call(&call.function.name, &call.function.arguments.to_string());
+                }
                 let result_text = tool
                     .run(call.function.arguments.clone())
                     .unwrap_or_else(|e| format!("Error: {}", e));
@@ -592,11 +598,13 @@ impl<'a> OpenAIClientState {
     /// 
     /// * `model` - The model configuration.
     /// * `tool_name` - The name of the tool to use.
+    /// * `show_call` - Optional callback function to show the tool call.
     /// 
     /// # Returns
     /// 
     /// An APIResult with the API response or a ClientError.
-    pub async fn generate_use_tool(&mut self, model: Option<&ModelConfig>) -> Result<GenerateResponse, ClientError> {
+    pub async fn generate_use_tool<F>(&mut self, model: Option<&ModelConfig>, show_call: Option<F>) -> Result<GenerateResponse, ClientError>
+    where F: Fn(&str, &str) {
         let model = model.unwrap_or(
             self.client
                 .model_config
@@ -640,6 +648,9 @@ impl<'a> OpenAIClientState {
                 if !*enabled {
                     return Err(ClientError::ToolNotFound);
                 }
+                if let Some(show_call) = &show_call {
+                    show_call(&call.function.name, &call.function.arguments.to_string());
+                }
                 let result_text = match tool.run(call.function.arguments.clone()) {
                     Ok(res) => res,
                     Err(e) => format!("Error: {}", e),
@@ -668,11 +679,13 @@ impl<'a> OpenAIClientState {
     ///
     /// * `model` - The model configuration.
     /// * `tool_name` - The name of the tool to use.
+    /// * `show_call` - Optional callback function to show the tool call.
     ///
     /// # Returns
     ///
     /// An APIResult with the API response or a ClientError.
-    pub async fn generate_with_tool(&mut self, model: Option<&ModelConfig>, tool_name: &str) -> Result<GenerateResponse, ClientError> {
+    pub async fn generate_with_tool<F>(&mut self, model: Option<&ModelConfig>, tool_name: &str, show_call: Option<F>) -> Result<GenerateResponse, ClientError>
+    where F: Fn(&str, &str) {
         let model = model.unwrap_or(
             self.client.model_config.as_ref().ok_or(ClientError::ModelConfigNotSet)?
         );
@@ -712,6 +725,9 @@ impl<'a> OpenAIClientState {
                     .ok_or(ClientError::ToolNotFound)?;
                 if !*enabled {
                     return Err(ClientError::ToolNotFound);
+                }
+                if let Some(show_call) = &show_call {
+                    show_call(&call.function.name, &call.function.arguments.to_string());
                 }
                 let result_text = match tool.run(call.function.arguments.clone()) {
                     Ok(res) => res,

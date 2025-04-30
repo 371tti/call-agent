@@ -96,7 +96,9 @@ async fn main() {
         prompt_stream.add(prompt).await;
 
         // generate a response
-        let result = prompt_stream.generate_can_use_tool(None).await;
+        let result = prompt_stream
+            .generate_can_use_tool::<fn(&str, &str)>(None, None)
+            .await;
         println!("{:?}", result);
 
         // get the response
