@@ -97,7 +97,7 @@ async fn main() {
 
         // generate a response
         let result = prompt_stream
-            .generate_can_use_tool::<fn(&str, &str)>(None, None)
+            .generate_can_use_tool::<fn(&str, &serde_json::Value)>(None, None)
             .await;
         println!("{:?}", result);
 

@@ -525,13 +525,13 @@ impl<'a> OpenAIClientState {
     /// # Arguments
     ///
     /// * `model` - The model configuration.
-    /// * `show_call` - Optional callback function to show the tool call.
+    /// * `show_call` - Optional callback function to show the tool call.(eg, `show_call("tool_name", "args")`)
     ///
     /// # Returns
     ///
     /// An APIResult with the API response or a ClientError.
     pub async fn generate_can_use_tool<F>(&mut self, model: Option<&ModelConfig>, show_call: Option<F>) -> Result<GenerateResponse, ClientError>
-    where F: Fn(&str, &str) {
+    where F: Fn(&str, &serde_json::Value) { 
         // Use the provided model configuration or fallback to the client's configuration.
         let model = model.or(self.client.model_config.as_ref()).ok_or(ClientError::ModelConfigNotSet)?;
 
@@ -569,7 +569,7 @@ impl<'a> OpenAIClientState {
                     return Err(ClientError::ToolNotFound);
                 }
                 if let Some(show_call) = &show_call {
-                    show_call(&call.function.name, &call.function.arguments.to_string());
+                    show_call(&call.function.name, &call.function.arguments);
                 }
                 let result_text = tool
                     .run(call.function.arguments.clone())
@@ -598,13 +598,13 @@ impl<'a> OpenAIClientState {
     /// 
     /// * `model` - The model configuration.
     /// * `tool_name` - The name of the tool to use.
-    /// * `show_call` - Optional callback function to show the tool call.
+    /// * `show_call` - Optional callback function to show the tool call.(eg, `show_call("tool_name", "args")`)
     /// 
     /// # Returns
     /// 
     /// An APIResult with the API response or a ClientError.
     pub async fn generate_use_tool<F>(&mut self, model: Option<&ModelConfig>, show_call: Option<F>) -> Result<GenerateResponse, ClientError>
-    where F: Fn(&str, &str) {
+    where F: Fn(&str, &serde_json::Value) {
         let model = model.unwrap_or(
             self.client
                 .model_config
@@ -649,7 +649,7 @@ impl<'a> OpenAIClientState {
                     return Err(ClientError::ToolNotFound);
                 }
                 if let Some(show_call) = &show_call {
-                    show_call(&call.function.name, &call.function.arguments.to_string());
+                    show_call(&call.function.name, &call.function.arguments);
                 }
                 let result_text = match tool.run(call.function.arguments.clone()) {
                     Ok(res) => res,
@@ -679,13 +679,13 @@ impl<'a> OpenAIClientState {
     ///
     /// * `model` - The model configuration.
     /// * `tool_name` - The name of the tool to use.
-    /// * `show_call` - Optional callback function to show the tool call.
+    /// * `show_call` - Optional callback function to show the tool call.(eg, `show_call("tool_name", "args")`)
     ///
     /// # Returns
     ///
     /// An APIResult with the API response or a ClientError.
     pub async fn generate_with_tool<F>(&mut self, model: Option<&ModelConfig>, tool_name: &str, show_call: Option<F>) -> Result<GenerateResponse, ClientError>
-    where F: Fn(&str, &str) {
+    where F: Fn(&str, &serde_json::Value) {
         let model = model.unwrap_or(
             self.client.model_config.as_ref().ok_or(ClientError::ModelConfigNotSet)?
         );
@@ -727,7 +727,7 @@ impl<'a> OpenAIClientState {
                     return Err(ClientError::ToolNotFound);
                 }
                 if let Some(show_call) = &show_call {
-                    show_call(&call.function.name, &call.function.arguments.to_string());
+                    show_call(&call.function.name, &call.function.arguments);
                 }
                 let result_text = match tool.run(call.function.arguments.clone()) {
                     Ok(res) => res,
