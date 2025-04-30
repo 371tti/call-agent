@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, result, sync::Arc};
 
 use reqwest::{Client, Response};
 
@@ -749,5 +749,135 @@ impl<'a> OpenAIClientState {
                 api_result: result,
             }
         )
+    }
+}
+
+pub struct ReasoningState<'a> {
+    pub state: &'a mut OpenAIClientState,
+    pub model: ModelConfig,
+    pub has_content: bool,
+    pub has_tool_calls: bool,
+    pub content: Option<String>,
+    pub tool_calls: Option<Vec<FunctionCall>>,
+    pub api_result: APIResult,
+}
+
+pub enum ToolMode {
+    /// Disable the tool
+    Disable,
+    /// Can use the tool
+    Auto,
+    /// Must use the tool
+    Force(String)
+}
+
+/// new api after v.1.4.0
+impl<'a> OpenAIClientState {
+    pub async fn reasoning(&'a mut self, model: Option<&ModelConfig>, mode: &ToolMode) -> Result<ReasoningState<'a>, ClientError> {
+        let model = model.unwrap_or(
+            self.client.model_config.as_ref().ok_or(ClientError::ModelConfigNotSet)?
+        ).clone();
+
+        let result = match &mode {
+            ToolMode::Disable => self.client.send(&self.prompt, Some(&model)).await?,
+            ToolMode::Auto => self.client.send_can_use_tool(&self.prompt, Some(&model)).await?,
+            ToolMode::Force(tool_name) => self.client.send_with_tool(&self.prompt, &tool_name, Some(&model)).await?,
+        };
+
+        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
+        let choice = choices.first().ok_or(ClientError::InvalidResponse)?;
+        let content = choice.message.content.clone();
+        let tool_calls = choice.message.tool_calls.clone();
+
+        let has_content = content.is_some();
+
+        // Add the assistant's reply to the conversation.
+        self.add(vec![Message::Assistant {
+            name: model.model_name.clone(),
+            content: if has_content { vec![MessageContext::Text(choice.message.content.clone().unwrap())] } else { vec![] },
+            tool_calls: choice.message.tool_calls.clone(),
+        }]).await;
+
+        Ok(ReasoningState {
+            state: &mut *self,
+            model: model,
+            has_content,
+            has_tool_calls: tool_calls.is_some(),
+            content,
+            tool_calls,
+            api_result: result,
+        })
+    }
+}
+
+impl<'a> ReasoningState<'a> {
+    /// Check if the reasoning state can proceed.
+    pub fn can_finish(&self) -> bool {
+        self.has_content && !self.has_tool_calls
+    }
+
+    /// Check if the reasoning state has tool calls.
+    pub fn show_tool_calls(&self) -> Vec<(&str, &serde_json::Value)> {
+        if let Some(tool_calls) = &self.tool_calls {
+            tool_calls.iter().map(|call| (call.function.name.as_str(), &call.function.arguments)).collect()
+        } else {
+            vec![]
+        }
+    }
+
+    /// step by step proceed
+    /// Proceed with the reasoning state.
+    /// 
+    /// # Arguments
+    /// - `mode` - The tool mode to use.
+    /// 
+    /// # Returns
+    /// - A Result indicating success or failure.
+    pub async fn proceed(&mut self, mode: &ToolMode) -> Result<(), ClientError> {
+        if let Some(tool_calls) = &self.tool_calls {
+            for call in tool_calls {
+                let (tool, enabled) = self.state.client.tools
+                    .get(&call.function.name)
+                    .ok_or(ClientError::ToolNotFound)?;
+                if !*enabled {
+                    return Err(ClientError::ToolNotFound);
+                }
+                let result_text = match tool.run(call.function.arguments.clone()) {
+                    Ok(res) => res,
+                    Err(e) => format!("Error: {}", e),
+                };
+                self.state.add(vec![Message::Tool {
+                    tool_call_id: call.id.clone(),
+                    content: vec![MessageContext::Text(result_text)],
+                }]).await;
+            }
+        }
+
+        let result = match mode {
+            ToolMode::Disable => self.state.client.send(&self.state.prompt, Some(&self.model)).await?,
+            ToolMode::Auto => self.state.client.send_can_use_tool(&self.state.prompt, Some(&self.model)).await?,
+            ToolMode::Force(tool_name) => self.state.client.send_with_tool(&self.state.prompt, tool_name, Some(&self.model)).await?,
+        };
+
+        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
+        let choice = choices.first().ok_or(ClientError::InvalidResponse)?;
+        let content = choice.message.content.clone();
+        let tool_calls = choice.message.tool_calls.clone();
+
+        let has_content = content.is_some();
+
+
+        self.state.add(vec![Message::Assistant {
+            name: self.model.model_name.clone(),
+            content: if has_content { vec![MessageContext::Text(choice.message.content.clone().unwrap())] } else { vec![] },
+            tool_calls: choice.message.tool_calls.clone(),
+        }]).await;
+
+        self.has_content = has_content;
+        self.has_tool_calls = tool_calls.is_some();
+        self.content = content;
+        self.tool_calls = tool_calls;
+        self.api_result = result;
+        Ok(())
     }
 }
