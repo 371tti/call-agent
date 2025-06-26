@@ -332,5 +332,5 @@ pub struct ResponseMessage {
 
     /// annotation for web search options
     #[serde(default)]
-    pub annotation: Option<serde_json::Value>
+    pub annotations: Option<serde_json::Value>
 }
