@@ -329,4 +329,8 @@ pub struct ResponseMessage {
 
     /// An optional refusal message.
     pub refusal: Option<String>,
+
+    /// annotation for web search options
+    #[serde(default)]
+    pub annotation: Option<serde_json::Value>
 }
