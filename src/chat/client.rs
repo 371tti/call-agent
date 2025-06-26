@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, result, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
 use reqwest::{Client, Response};
 
@@ -428,6 +428,18 @@ impl<'a> OpenAIClientState {
             }
         }
         self.prompt.extend(messages);
+        self
+    }
+
+    pub async fn add_last(&mut self, messages: Vec<Message>) -> &mut Self {
+        if let Some(limit) = self.entry_limit {
+            while self.prompt.len() as u64 + messages.len() as u64 > limit {
+                self.prompt.pop_front();
+            }
+        }
+        for msg in messages {
+            self.prompt.push_front(msg);
+        }
         self
     }
 
