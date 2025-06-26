@@ -75,7 +75,7 @@ pub struct APIRequest {
     /// Range: 2.0..-2.0
     #[serde(skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f64>,
-    
+
     /// Options for performing web search with available models
     #[serde(skip_serializing_if = "Option::is_none")]
     pub web_search_options: Option<WebSearchOptions>,
@@ -195,7 +195,7 @@ impl Serialize for WebSearchOptions {
 }
 
 /// User location information for req api web search options
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct UserLocation {
     /// Free text input for the city of the user.
     /// e.g. "San Francisco"
@@ -209,4 +209,35 @@ pub struct UserLocation {
     /// The IANA timezone of the user.
     /// e.g. "America/Los_Angeles"
     pub timezone: Option<String>,
+}
+
+impl Serialize for UserLocation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+
+        let mut state = serializer.serialize_struct("UserLocation", 2)?;
+
+        // Always set "type" to "approximate"
+        state.serialize_field("type", "approximate")?;
+
+        // Build the "approximate" object with only non-None fields
+        let mut approximate = serde_json::Map::new();
+        if let Some(ref city) = self.city {
+            approximate.insert("city".to_string(), serde_json::Value::String(city.clone()));
+        }
+        if let Some(ref country) = self.country {
+            approximate.insert("country".to_string(), serde_json::Value::String(country.clone()));
+        }
+        if let Some(ref region) = self.region {
+            approximate.insert("region".to_string(), serde_json::Value::String(region.clone()));
+        }
+        if let Some(ref timezone) = self.timezone {
+            approximate.insert("timezone".to_string(), serde_json::Value::String(timezone.clone()));
+        }
+
+        state.serialize_field("approximate", &approximate)?;
+        state.end()
+    }
 }
