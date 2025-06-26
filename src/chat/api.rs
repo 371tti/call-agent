@@ -75,6 +75,10 @@ pub struct APIRequest {
     /// Range: 2.0..-2.0
     #[serde(skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f64>,
+    
+    /// Options for performing web search with available models
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub web_search_options: Option<WebSearchOptions>,
 }
 
 // Custom Serialize implementation for APIRequest
@@ -163,4 +167,46 @@ pub struct APIUsage {
     pub completion_tokens: Option<u64>,
     /// Total number of tokens used (prompt + response)
     pub total_tokens: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebSearchOptions {
+    /// Degree of context size used for web search
+    /// - "low"
+    /// - "medium"
+    /// - "high"
+    /// default: "medium"
+    pub search_context_size: Option<String>,
+    pub user_location: UserLocation,
+}
+
+impl Serialize for WebSearchOptions {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("WebSearchOptions", 2)?;
+        // Use "medium" as default if search_context_size is None
+        let size = self.search_context_size.as_deref().unwrap_or("medium");
+        state.serialize_field("search_context_size", size)?;
+        state.serialize_field("user_location", &self.user_location)?;
+        state.end()
+    }
+}
+
+/// User location information for req api web search options
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserLocation {
+    /// Free text input for the city of the user.
+    /// e.g. "San Francisco"
+    pub city: Option<String>,
+    /// The two-letter ISO country code of the user.
+    /// e.g. "US"
+    pub country: Option<String>,
+    /// Free text input for the region of the user.
+    /// e.g. "California"
+    pub region: Option<String>,
+    /// The IANA timezone of the user.
+    /// e.g. "America/Los_Angeles"
+    pub timezone: Option<String>,
 }

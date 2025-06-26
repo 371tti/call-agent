@@ -2,6 +2,8 @@ use std::{collections::{HashMap, VecDeque}, result, sync::Arc};
 
 use reqwest::{Client, Response};
 
+use crate::chat::api::WebSearchOptions;
+
 use super::{
     api::{APIRequest, APIResponse, APIResponseHeaders},
     err::ClientError,
@@ -53,6 +55,8 @@ pub struct ModelConfig {
     /// default: false
     /// Forced disabled in parallel ToolCalls
     pub strict: Option<bool>,
+    /// Options for performing web search with available models.
+    pub web_search_options: Option<WebSearchOptions>,
 }
 
 /// Contains the API response and its headers.
@@ -355,6 +359,7 @@ impl OpenAIClient {
             top_p:                  model_config.top_p,
             reasoning_effort:       model_config.reasoning_effort.clone(),
             presence_penalty:       model_config.presence_penalty,
+            web_search_options:     model_config.web_search_options.clone(),
         };
 
         let res = self

@@ -67,6 +67,7 @@ async fn main() {
         presence_penalty: Some(0.0),
         model_name: None,
         reasoning_effort: None,
+        web_search_options: None, // Set to None if not using web search
     };
 
     // set the model configuration

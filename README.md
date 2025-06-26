@@ -55,6 +55,7 @@ let config = ModelConfig {
     presence_penalty: Some(0.0),
     model_name: None,
     reasoning_effort: None,
+    web_search_options: None,
 };
 
 // set the model configuration
